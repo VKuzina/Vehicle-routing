@@ -1,0 +1,199 @@
+package routing;
+
+import java.io.IOException;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Random;
+
+import routing.create.CVRPCreate;
+import routing.create.ICreate;
+import routing.cross.ArcCrossover;
+import routing.cross.ICrossover;
+import routing.cross.SequenceCrossover;
+import routing.evaluate.Evaluator;
+import routing.evaluate.IEvaluator;
+import routing.mutate.CloseMutator;
+import routing.mutate.DetourMutator;
+import routing.mutate.IMutation;
+import routing.mutate.RandomNodeMutator;
+import routing.select.ISelection;
+import routing.select.TournamentSelection;
+
+public class UsmjeravanjeVozila {
+	private static final int tournamentSize = 5;
+
+	public static void main(String[] args) {
+		if (args.length != 6) {
+			System.err.println(
+					"Potrebno je unijeti šest argumenata i to redom putanju do datoteke s problemom, veličinu populacije, broj iteracija, vjerojatnost mutacije, veličinu mutirane populacije i broj iteracija za mutiranu populaciju.");
+		}
+
+		Path data = Paths.get(args[0]);
+		int populationSize = Integer.parseInt(args[1]);
+		int NOIterations = Integer.parseInt(args[2]);
+		double mutationProbability = Double.parseDouble(args[3]);
+		int mutatedPopulationSize = Integer.parseInt(args[4]);
+		int NOMutatedIterations = Integer.parseInt(args[5]);
+
+		List<String> lines = null;
+
+		try {
+			lines = Files.readAllLines(data);
+		} catch (IOException e) {
+			System.err.println("Čitanje iz dane datoteke nije uspjelo.");
+			System.exit(0);
+		}
+
+		String name;
+		int NOTrucks = 0;
+		int dimension = 0;
+		int capacity = 0;
+		Location[] locations = null;
+		int[] demands = null;
+		
+		
+		for (int i = 0; i < lines.size(); i++) {
+			String line = lines.get(i);
+			if (line.startsWith("NAME")) {
+				name = line.split(":")[1].trim();
+			} else if (line.startsWith("COMMENT")) {
+				NOTrucks = Integer.parseInt(line.split(",")[1].split(":")[1].trim());
+			} else if (line.startsWith("DIMENSION")) {
+				dimension = Integer.parseInt(line.split(":")[1].trim());
+				locations = new Location[dimension];
+				demands = new int[dimension];
+			} else if (line.startsWith("CAPACITY")) {
+				capacity = Integer.parseInt(line.split(":")[1].trim());
+			} else if (line.startsWith("NODE_COORD_SECTION")) {
+				for (int j = 0; j < dimension; j++) {
+					i++;
+					line = lines.get(i);
+
+					String[] parts = line.trim().split("\\s+");
+					locations[j] = new Location(Integer.parseInt(parts[1]), Integer.parseInt(parts[2]));
+				}
+			} else if (line.startsWith("DEMAND_SECTION")) {
+				for (int j = 0; j < dimension; j++) {
+					i++;
+					line = lines.get(i);
+
+					demands[j] = Integer.parseInt(line.trim().split("\\s+")[1]);
+				}
+			}
+		}
+
+		int[][] distances = Util.calculateEuclidian2D(locations);
+
+		Random random = new Random();
+		ICreate creator = new CVRPCreate(NOTrucks, capacity, dimension, distances, demands, random);
+		IEvaluator evaluator = new Evaluator(distances);
+		ISelection selector = new TournamentSelection(tournamentSize, random);
+		List<ICrossover> crossers = new ArrayList();
+		List<IMutation> mutators = new ArrayList();
+		crossers.add(new SequenceCrossover(creator));
+		crossers.add(new ArcCrossover(creator));
+		//crossers.add(new NodeCrossover(creator));
+		mutators.add(new DetourMutator(random, dimension, distances, creator, mutatedPopulationSize));
+		mutators.add(new RandomNodeMutator(random, dimension, distances, creator, mutatedPopulationSize));
+		mutators.add(new CloseMutator(random, dimension, distances, creator, mutatedPopulationSize));
+
+		/*
+		 * List<List<Integer>> rute = new ArrayList(); rute.add(Arrays.asList(21, 31,
+		 * 19, 17, 13, 7, 26)); rute.add(Arrays.asList(12, 1, 16, 30));
+		 * rute.add(Arrays.asList(27,24)); rute.add(Arrays.asList(29, 18, 8, 9, 22, 15,
+		 * 10, 25, 5, 20)); rute.add(Arrays.asList(14, 28, 11, 4, 23, 3, 2, 6)); Unit
+		 * najbolji = creator.create(rute, new ArrayList());
+		 * evaluator.evaluate(najbolji); System.out.println(najbolji);
+		 */
+
+		List<Unit> population = new ArrayList();
+		for (int i = 0; i < populationSize; i++) {
+			Unit created = creator.create();
+			population.add(created);
+			evaluator.evaluate(created);
+		}
+
+		Collections.sort(population);
+		System.out.println(population.get(0));
+
+		for (int i = 0; i < NOIterations; i++) {
+			List<Unit> newPopulation = new ArrayList();
+
+			newPopulation.add(population.get(0));
+			newPopulation.add(population.get(1));
+
+			for (int j = 2; j < populationSize / 2; j++) {
+				Unit firstParent = selector.select(population);
+				Unit secondParent = selector.select(population);
+
+				while (secondParent == firstParent) {
+					secondParent = selector.select(population);
+				}
+
+				Unit firstChild = crossers.get(random.nextInt(crossers.size())).cross(firstParent, secondParent);
+				Unit secondChild = crossers.get(random.nextInt(crossers.size())).cross(secondParent, firstParent);
+				evaluator.evaluate(firstChild);
+				evaluator.evaluate(secondChild);
+				newPopulation.add(firstChild);
+				newPopulation.add(secondChild);
+
+				if (random.nextDouble() < mutationProbability) {
+					List<Unit> mutatedPopulation = mutators.get(random.nextInt(mutators.size())).mutatePopulation(firstChild);
+
+					for (Unit u : mutatedPopulation) {
+						evaluator.evaluate(u);
+					}
+
+					Collections.sort(mutatedPopulation);
+					for (int k = 0; k < NOMutatedIterations; k++) {
+						List<Unit> newMutatedPopulation = new ArrayList();
+						
+						newMutatedPopulation.add(mutatedPopulation.get(0));
+						for (int l = 1; l <  mutatedPopulationSize/ 2; l++) {
+							Unit firstMutatedParent = selector.select(mutatedPopulation);
+							Unit secondMutatedParent = selector.select(mutatedPopulation);
+
+							while (secondMutatedParent == firstMutatedParent) {
+								secondMutatedParent = selector.select(mutatedPopulation);
+							}
+
+							Unit firstMutatedChild = crossers.get(random.nextInt(crossers.size())).cross(firstMutatedParent, secondMutatedParent);
+							Unit secondMutatedChild = crossers.get(random.nextInt(crossers.size())).cross(secondMutatedParent, firstMutatedParent);
+
+							evaluator.evaluate(firstMutatedChild);
+							evaluator.evaluate(secondMutatedChild);
+							
+							newMutatedPopulation.add(firstMutatedChild);
+							newMutatedPopulation.add(secondMutatedChild);
+							
+							if (random.nextDouble() < mutationProbability) {
+								newMutatedPopulation.add(mutators.get(random.nextInt(mutators.size())).mutate(firstMutatedChild));
+								l++;
+							}
+						}
+						
+						Collections.sort(newMutatedPopulation);
+						
+						mutatedPopulation = newMutatedPopulation;
+					}
+					
+					newPopulation.add(mutatedPopulation.get(0));
+					j++;
+				}
+			}
+
+			Collections.sort(newPopulation);
+
+			population = newPopulation;
+
+			System.out.println(population.get(0).getFitness());
+			System.out.println("NAPRAVI 3-TURNIRSKU ELIMINACIJSKU SELEKCIJU");
+		}
+	}
+
+}
