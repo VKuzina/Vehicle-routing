@@ -24,7 +24,9 @@ public class TournamentSelection implements ISelection{
 		for (int i = 1; i < tournamentSize; i++) {
 			Unit current = population.get(random.nextInt(size));
 			
-			if (current.getFitness() < best.getFitness()) {
+			if (current.getRank() < best.getRank() ||
+				(current.getRank() == best.getRank() 
+				 && current.getGroupingDistance() > best.getGroupingDistance())) {
 				best = current;
 			}
 		}

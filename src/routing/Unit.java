@@ -7,13 +7,17 @@ import java.util.StringJoiner;
 
 public class Unit implements Comparable<Unit>{
 	private List<Vehicle> trucks;
-	private double fitness;
+	private double distance;
+	private double balance;
+	private double groupingDistance;
+	private int rank;
 	private double[][] distances;
 	private Location[] locations;
+	private int currentIndex = -1;
 	
 	public Unit(List<Vehicle> trucks, double[][] distances, Location[] locations) {
 		this.trucks = trucks;
-		this.fitness = Double.MAX_VALUE;
+		this.distance = Double.MAX_VALUE;
 		this.distances = distances;
 		this.locations = locations;
 	}
@@ -45,21 +49,54 @@ public class Unit implements Comparable<Unit>{
 			sb.append(sj.toString() + "\n");
 		}
 		
-		sb.append(fitness + "\n");
-		return sb.toString();
+		sb.append(distance + "\n");
+		return "distance: " + distance + " balance: " + balance;
 	}
 	
 	public List<Vehicle> getTrucks() {
 		return trucks;
 	}
 	
-	public void setFitness(double fitness) {
-		this.fitness = fitness;
+	public void setDistance(double distance) {
+		this.distance = distance;
 	}
 	
-	public double getFitness() {
-		return fitness;
+	public double getDistance() {
+		return distance;
 	}
+	
+	public void setBalance(double balance) {
+		this.balance = balance;
+	}
+	
+	public double getBalance() {
+		return balance;
+	}
+	
+	public void setCurrentIndex(int currentIndex) {
+		this.currentIndex = currentIndex;
+	}
+	
+	public int getCurrentIndex() {
+		return currentIndex;
+	}
+	
+	public double getGroupingDistance() {
+		return groupingDistance;
+	}
+	
+	public void setGroupingDistance(double groupingDistance) {
+		this.groupingDistance = groupingDistance;
+	}
+	
+	public int getRank() {
+		return rank;
+	}
+	
+	public void setRank(int rank) {
+		this.rank = rank;
+	}
+	
 	public List<List<Integer>> getRoutes() {
 		List<List<Integer>> routes = new ArrayList();
 		for (Vehicle t: trucks) {
@@ -71,17 +108,18 @@ public class Unit implements Comparable<Unit>{
 
 	@Override
 	public int compareTo(Unit other) {
-		if (trucks.size() < other.trucks.size()) {
-			return -1;
-		} else if (trucks.size() > other.trucks.size()){
-			return 1;
-		} else if (fitness < other.fitness) {
-			return -1;
-		} else if (fitness > other.fitness) {
-			return 1;
-		} else {
-			return 0;
-		}
+		if (distance == other.distance && balance == other.balance) return 0;
+		else if (distance >= other.distance && balance <= other.balance) return 1;
+		else if (distance <= other.distance && balance >= other.balance) return -1;
+		else return 0;
+	}
+	
+	public boolean dominates(Unit other) {
+		return compareTo(other) < 0;
+	}
+	
+	public boolean is_dominated(Unit other) {
+		return compareTo(other) > 0;
 	}
 	
 	@Override
@@ -92,7 +130,7 @@ public class Unit implements Comparable<Unit>{
 		
 		Unit second = (Unit) other;
 		
-		if (fitness == second.fitness) {
+		if (distance == second.distance && balance == second.balance) {
 			return true;
 		}
 		
@@ -101,7 +139,7 @@ public class Unit implements Comparable<Unit>{
 	
 	@Override
 	public int hashCode() {
-		return ((Double) fitness).hashCode();
+		return ((Double) distance).hashCode();
 	}
 	
 	public Unit copy() {
