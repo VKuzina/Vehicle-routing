@@ -102,7 +102,6 @@ public class CVRPCreate implements ICreate{
 		
 		if (leastDistance == Double.MAX_VALUE) {
 			if (trucks.size() == NOTrucks) {
-				//System.out.println("STVARANJE NIJE USPJELO!!!");
 				throw new IllegalArgumentException();
 			}
 			

@@ -1,5 +1,20 @@
 package routing;
 
+import java.awt.BorderLayout;
+import com.panayotis.gnuplot.JavaPlot;
+import com.panayotis.gnuplot.plot.DataSetPlot;
+import com.panayotis.gnuplot.style.NamedPlotColor;
+import com.panayotis.gnuplot.style.PlotStyle;
+import com.panayotis.gnuplot.style.Style;
+
+import java.awt.Color;
+import java.awt.Container;
+import java.awt.Dimension;
+import java.awt.FlowLayout;
+import java.awt.GridLayout;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.io.File;
 import java.io.IOException;
 
 import java.nio.file.Files;
@@ -9,11 +24,25 @@ import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
 import java.util.StringJoiner;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import javax.swing.BorderFactory;
+import javax.swing.JButton;
+import javax.swing.JComboBox;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JProgressBar;
+import javax.swing.JScrollPane;
+import javax.swing.JTabbedPane;
+import javax.swing.JTextArea;
+import javax.swing.JTextField;
+import javax.swing.SwingUtilities;
 
 import routing.create.CVRPCreate;
 import routing.create.ICreate;
@@ -21,6 +50,8 @@ import routing.cross.ArcCrossover;
 import routing.cross.ICrossover;
 import routing.cross.NodeCrossover;
 import routing.cross.SequenceCrossover;
+import routing.draw.Algorithm;
+import routing.draw.Parameter;
 import routing.evaluate.Evaluator;
 import routing.evaluate.IEvaluator;
 import routing.mutate.CloseMutator;
@@ -33,11 +64,18 @@ import routing.select.ISelection;
 import routing.select.TournamentSelection;
 import routing.select.IndexSelection;
 
-public class UsmjeravanjeVozila {
-	private static final int tournamentSize = 3;
+public class UsmjeravanjeVozila extends JFrame {
 	private static final double k3 = 0.5;
 	private static final double k1 = 0.0;
 	private static final double k2 = 3.0;
+
+	private static final int startingWidth = 1000;
+	private static final int startingHeight = 500;
+	private static final int startingPositionX = 100;
+	private static final int startingPositionY = 100;
+
+	private JTabbedPane tabbedPane;
+	private JProgressBar progressBar;
 
 	public String name = null;
 	public int NOTrucks = 0;
@@ -50,6 +88,7 @@ public class UsmjeravanjeVozila {
 	Path data = null;
 	int populationSize = 0;
 	int NOIterations = 0;
+	int tournamentSize = 0;
 	int withoutImprovement = 0;
 	boolean selection = false;
 	int mutatedPopulationSize = 0;
@@ -72,33 +111,42 @@ public class UsmjeravanjeVozila {
 	int staleCounter = 0;
 	List<List<Unit>> fronts = null;
 
-	public void usmjeravanje(String[] args) {
+	JTextArea output = null;
+	JButton start = null;
 
-		takeOutData(args);
+	public void usmjeravanje(String arg, int broj, int drugibroj) {
+		populationSize = 60;
+		NOIterations = 2500;
+		tournamentSize = 3;
+		mutatedPopulationSize = 5;
+		NOMutatedIterations = 5;
+		mutationProbability = 0.0;
+		data = Paths.get(arg);
+		// takeOutData(arg);
 		readInstance();
-		setUpOperators();
+		setUpOperators(drugibroj);
 		setUpInitialPopulation();
 
 		evolve();
 
 		double time = ((double) Math.round((double) (System.nanoTime() - startTime) / Math.pow(10, 7))) / 100;
-		String elim = "elimination";
-		if (selection) {
-			elim = "selection";
-		}
 
-		Path result = Paths.get("./Results/hmo/" + args[0]);
-		String output = population.get(0) + "\n";
+		Path result = Paths.get("./Results/hmo/mut/o" + broj);
+		StringJoiner sj = new StringJoiner("\n");
+		sj.add("\n");
+		for (Unit u : fronts.get(0)) {
+			sj.add(u.justDataOutput());
+		}
+		
+		String output = sj.toString();
 
 		try {
 			result.toFile().createNewFile();
 			Files.write(result, output.getBytes(), StandardOpenOption.APPEND);
+			System.out.println("zapisano");
 		} catch (IOException e) {
 			System.err.println("Neuspjelo pisanje u datoteku.");
 		}
-//		
-		System.out.println(population.get(0));
-		System.out.println(time);
 	}
 
 	public void read(List<String> lines) {
@@ -185,21 +233,21 @@ public class UsmjeravanjeVozila {
 		}
 	}
 
-	public void setUpOperators() {
+	public void setUpOperators(int j) {
 		distances = Util.calculateEuclidian2D(locations);
 		evaluator = new Evaluator(distances);
 		separator = new ParetoSeparator(populationSize);
 		creator = new CVRPCreate(NOTrucks, capacity, dimension, distances, demands, locations, random);
-
+		
+		
 		crossers.add(new SequenceCrossover(creator));
 		crossers.add(new ArcCrossover(creator));
 		// crossers.add(new NodeCrossover(creator));
+		
 		mutators.add(new DetourMutator(random, dimension, distances, creator, mutatedPopulationSize));
 		mutators.add(new RandomNodeMutator(random, dimension, distances, creator, mutatedPopulationSize));
-		// mutators.add(new CloseMutator(random, dimension, distances, creator,
-		// mutatedPopulationSize));
-		// mutators.add(new MiniMutator(random, dimension, distances, creator,
-		// mutatedPopulationSize));
+		// mutators.add(new CloseMutator(random, dimension, distances, creator, mutatedPopulationSize));
+		// mutators.add(new MiniMutator(random, dimension, distances, creator, mutatedPopulationSize));
 	}
 
 	private void setUpInitialPopulation() {
@@ -216,26 +264,40 @@ public class UsmjeravanjeVozila {
 		for (int i = 0; i < NOIterations; i++) {
 //			if (is_stale())
 //				break;
-			
+
 			List<Unit> newPopulation = selection_algorithm();
 
 			population.addAll(newPopulation);
 			
-			fronts = separator.separate(population);
-			
-			population = separator.group(fronts);
+			population = new ArrayList<Unit>(new HashSet<Unit>(population));
 
-			System.out.println(prettyOutput(fronts));
+			fronts = separator.separate(population);
+
+			population = separator.group(fronts);
+			
+			//System.out.println(prettyOutput(fronts));
+			if (i % 10 == 0) {
+				System.out.println(i);
+				output.setText(prettyOutput(fronts));
+			}
+			
+			int percent = (int) ((i / (double) (NOIterations - 1)) * 100);
+			progressBar.setValue(percent);
+			progressBar.setString(percent + "%");
 		}
+		
+		start.setEnabled(true);
 	}
 
 	private String prettyOutput(List<List<Unit>> fronts) {
 		StringJoiner sj = new StringJoiner("\n");
 		sj.add("front");
-		for (Unit u : fronts.get(0)) {
+		List<Unit> sorted = fronts.get(0);
+		Collections.sort(sorted, (u1, u2) -> ((Double)u1.getDistance()).compareTo(u2.getDistance()));
+		for (Unit u : sorted) {
 			sj.add(u.toString());
 		}
-		
+
 		return sj.toString();
 	}
 
@@ -266,17 +328,10 @@ public class UsmjeravanjeVozila {
 		return false;
 	}
 
-	private void nsga2() {
-		List<Unit> newPopulation = selection_algorithm();
-	}
-
 	private List<Unit> selection_algorithm() {
 		List<Unit> newPopulation = new ArrayList();
 
-		newPopulation.add(population.get(0));
-		newPopulation.add(population.get(1));
-
-		for (int j = 2; j < populationSize / 2; j++) {
+		for (int j = 0; j < populationSize / 2; j++) {
 			Unit firstParent = selector.select(population);
 			Unit secondParent = selector.select(population);
 
@@ -289,7 +344,7 @@ public class UsmjeravanjeVozila {
 
 			evaluator.evaluate(firstChild);
 			evaluator.evaluate(secondChild);
-
+			
 			newPopulation.add(firstChild);
 			newPopulation.add(secondChild);
 
@@ -318,17 +373,19 @@ public class UsmjeravanjeVozila {
 						Unit secondMutatedChild = crossers.get(random.nextInt(crossers.size()))
 								.cross(secondMutatedParent, firstMutatedParent);
 
-						evaluator.evaluate(firstMutatedChild);
-						evaluator.evaluate(secondMutatedChild);
-
 						newMutatedPopulation.add(firstMutatedChild);
 						newMutatedPopulation.add(secondMutatedChild);
 
 						if (random.nextDouble() < mutationProbability) {
-							newMutatedPopulation
-									.add(mutators.get(random.nextInt(mutators.size())).mutate(firstMutatedChild));
+							Unit doubleMutetedChild = mutators.get(random.nextInt(mutators.size()))
+									.mutate(firstMutatedChild);
+							newMutatedPopulation.add(doubleMutetedChild);
 							l++;
+							evaluator.evaluate(doubleMutetedChild);
 						}
+
+						evaluator.evaluate(firstMutatedChild);
+						evaluator.evaluate(secondMutatedChild);
 					}
 
 					mutatedPopulation.addAll(newMutatedPopulation);
@@ -336,8 +393,10 @@ public class UsmjeravanjeVozila {
 					mutatedPopulation = separator.group(mutatedFronts);
 				}
 				
+				if (mutatedPopulationSize != 0) {
 				newPopulation.add(mutatedFronts.get(0).get(random.nextInt(mutatedFronts.get(0).size())));
 				j++;
+				}
 			}
 		}
 
@@ -450,9 +509,155 @@ public class UsmjeravanjeVozila {
 //	}
 
 	public static void main(String[] args) {
-		for (int i = 0; i < 5; i++) {
-			UsmjeravanjeVozila u = new UsmjeravanjeVozila();
-			u.usmjeravanje(args);
+		for (int i = 0; i < 15; i++) {
+			for (int j = 6; j < 7; j++) {
+				UsmjeravanjeVozila u = new UsmjeravanjeVozila();
+				u.usmjeravanje("./i1.txt", i, j);
+			}
 		}
+		
+		//SwingUtilities.invokeLater(() -> new UsmjeravanjeVozila().setVisible(true));
 	}
+
+	public UsmjeravanjeVozila() {
+		setSize(startingWidth, startingHeight);
+		setLocation(startingPositionX, startingPositionY);
+		setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+		setTitle("Usmjeravanje vozila");
+
+		initGUI();
+	}
+
+	private void initGUI() {
+		Container cp = getContentPane();
+		cp.setLayout(new BorderLayout());
+		progressBar = new JProgressBar();
+
+		tabbedPane = new JTabbedPane();
+		cp.add(tabbedPane, BorderLayout.CENTER);
+
+		List<Parameter> parameters = new ArrayList<>();
+		Parameter p1 = new Parameter(new JLabel("Tournament Size"), new JTextField("3"));
+		parameters.add(p1);
+		
+		createNewTab(parameters, "Multiobjective VRP", tabbedPane, "i1.txt");
+
+		JPanel doljnji = new JPanel(new FlowLayout());
+		progressBar.setStringPainted(true);
+		progressBar.setPreferredSize(new Dimension(400, 30));
+		doljnji.add(progressBar);
+		cp.add(doljnji, BorderLayout.SOUTH);
+	}
+
+	private void createNewTab(List<Parameter> parameters, String string, JTabbedPane tabbedPane, String path) {
+		Parameter p1 = new Parameter(new JLabel("Population size"), new JTextField("100"));
+		Parameter p2 = new Parameter(new JLabel("Number of iterations"), new JTextField("10000"));
+		Parameter p3 = new Parameter(new JLabel("Probability of mutation"), new JTextField("0.3"));
+		Parameter p4 = new Parameter(new JLabel("Tournament size"), new JTextField("3"));
+		Parameter p5 = new Parameter(new JLabel("Mutated population size"), new JTextField("5"));
+		Parameter p6 = new Parameter(new JLabel("Mutated iteration count"), new JTextField("5"));
+		Parameter p7 = new Parameter(new JLabel("Problem file path"), new JTextField("./i1.txt"));
+
+		JPanel alg = new JPanel(new BorderLayout());
+
+		JPanel desno = new JPanel(new BorderLayout());
+
+		JPanel param = new JPanel(new GridLayout(4, 2));
+		desno.add(param, BorderLayout.CENTER);
+		param.add(p1);
+		param.add(p2);
+		param.add(p3);
+		param.add(p4);
+		param.add(p5);
+		param.add(p6);
+		param.add(p7);
+
+		alg.add(desno, BorderLayout.NORTH);
+
+		output = new JTextArea();
+		JScrollPane outputPannel = new JScrollPane(output);
+		output.setBorder(BorderFactory.createLineBorder(Color.blue));
+		output.setText("Output");
+		output.setEditable(true);
+
+		JPanel prepanel = new JPanel(new BorderLayout());
+		JPanel panel = new JPanel(new BorderLayout());
+
+		JPanel startHelp = new JPanel(new FlowLayout());
+		start = new JButton("Izvedi");
+		start.setPreferredSize(new Dimension(200, 30));
+		startHelp.add(start);
+		prepanel.add(panel, BorderLayout.CENTER);
+		prepanel.add(startHelp, BorderLayout.SOUTH);
+		panel.add(outputPannel, BorderLayout.CENTER);
+		progressBar.setValue(0);
+		progressBar.setString(0 + "%");
+
+		start.addActionListener(new ActionListener() {
+
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				start.setEnabled(false);
+
+				Thread t = new Thread(() -> {
+					populationSize = Integer.parseInt(p1.getValue());
+					NOIterations = Integer.parseInt(p2.getValue());
+					mutationProbability = Double.parseDouble(p3.getValue());
+					tournamentSize = Integer.parseInt(p4.getValue());
+					mutatedPopulationSize = Integer.parseInt(p5.getValue());
+					NOMutatedIterations = Integer.parseInt(p6.getValue());
+					data = Paths.get(p7.getValue());
+
+					progressBar.setValue(0);
+					progressBar.setString(0 + "%");
+
+					//usmjeravanje(path);
+					
+					plot();
+				});
+
+				t.start();
+			}
+		});
+		alg.add(prepanel, BorderLayout.CENTER);
+		tabbedPane.add(string, alg);
+	}
+
+	protected void plot() {
+		JavaPlot plot = new JavaPlot();
+		
+		for(List<Unit> front :fronts) {
+			int j = 0;
+			double[][] data = new double[front.size()][2];
+	
+			for (int i = 0; i < front.size(); i++) {
+				Unit u = front.get(i);
+				data[i][0] = u.getDistance();
+				data[i][1] = u.getBalance();
+			}
+	
+			DataSetPlot dataPlot = new DataSetPlot(data);
+	
+		    plot.addPlot(dataPlot);
+		    PlotStyle stl = dataPlot.getPlotStyle();
+		    stl.setStyle(Style.LINESPOINTS);
+		    if (j%2 ==0) {
+	        stl.setLineType(NamedPlotColor.BLACK);
+		    } else {
+		    	stl.setLineType(NamedPlotColor.GREEN);
+		    }
+	        stl.setPointType(7);
+	        stl.setPointSize(2);
+	        stl.setLineType(2);
+	        stl.setLineWidth(2);
+	        j++;
+	        
+	        if (j == 1) {
+	        	break;
+	        }
+		}
+	    plot.plot();
+	}
+	
+	
 }

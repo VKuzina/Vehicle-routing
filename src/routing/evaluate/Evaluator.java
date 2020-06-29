@@ -36,9 +36,13 @@ public class Evaluator implements IEvaluator{
 			totalDistance += routeDistance;
 		}
 		
-		double balance = (maxVehicleDistance - minVehicleDistance) / (totalDistance / distances.length);
+		double balance = (maxVehicleDistance - minVehicleDistance) / (totalDistance / trucks.size());
 		
 		unit.setDistance(totalDistance);
+		if (balance == 0.0) {
+			int a = 4;
+			int b = 5;
+		}
 		unit.setBalance(balance);
 	}
 	

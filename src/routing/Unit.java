@@ -22,6 +22,9 @@ public class Unit implements Comparable<Unit>{
 		this.locations = locations;
 	}
 	
+	public String justDataOutput() {	
+		return distance + " " + balance;
+	}
 	@Override
 	public String toString() {
 		StringBuilder sb = new StringBuilder(trucks.size() + "\n");
@@ -109,8 +112,8 @@ public class Unit implements Comparable<Unit>{
 	@Override
 	public int compareTo(Unit other) {
 		if (distance == other.distance && balance == other.balance) return 0;
-		else if (distance >= other.distance && balance <= other.balance) return 1;
-		else if (distance <= other.distance && balance >= other.balance) return -1;
+		else if (distance >= other.distance && balance >= other.balance) return 1;
+		else if (distance <= other.distance && balance <= other.balance) return -1;
 		else return 0;
 	}
 	

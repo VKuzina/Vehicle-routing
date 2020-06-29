@@ -112,13 +112,15 @@ public class ParetoSeparator {
 				currentSize += front.size();
 			} else {
 				List<Unit> partialFront = new ArrayList<Unit>();
-				front.sort((u1, u2) -> ((Double)u1.getGroupingDistance()).compareTo(u2.getGroupingDistance()));
+				front.sort((u1, u2) -> ((Double)u2.getGroupingDistance()).compareTo(u1.getGroupingDistance()));
 				for (Unit u : front) {
 					if (currentSize >= defaultSize) break;
 					
 					partialFront.add(u);
 					currentSize++;
 				}
+				
+				survivingPopulation.add(partialFront);
 			}
 			
 			if (currentSize == defaultSize) {
